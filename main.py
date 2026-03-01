@@ -23,7 +23,7 @@ app.add_middleware(
 )
 
 # -----------------------------
-# Request / Response Models
+# Models
 # -----------------------------
 class CodeRequest(BaseModel):
     code: str
@@ -54,18 +54,16 @@ def execute_python_code(code: str) -> dict:
 
 
 # -----------------------------
-# AI Error Analysis using IITM AI Pipe
+# AI Error Analysis (AI Pipe Gemini)
 # -----------------------------
 def analyze_error_with_ai(code: str, tb: str) -> List[int]:
 
     prompt = f"""
 Analyze the following Python code and traceback.
-Identify ONLY the line number(s) where the error occurred.
+Return ONLY the line number(s) where the error occurred.
 
-Return strictly in this JSON format:
-{{
-  "error_lines": [line_numbers]
-}}
+Respond strictly in this JSON format:
+{{ "error_lines": [line_numbers] }}
 
 CODE:
 {code}
@@ -75,24 +73,39 @@ TRACEBACK:
 """
 
     response = requests.post(
-        "https://aipipe.iitm.ac.in/generate",
+        "https://aipipe.org/geminiv1beta/models/gemini-1.5-flash:generateContent",
         headers={
             "Authorization": f"Bearer {os.getenv('AI_PIPE_TOKEN')}",
             "Content-Type": "application/json"
         },
         json={
-            "model": "gemini-2.0-flash-exp",
-            "prompt": prompt
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ]
         }
     )
 
     data = response.json()
 
-    return data.get("error_lines", [])
+    try:
+        # Extract AI text response
+        ai_text = data["candidates"][0]["content"]["parts"][0]["text"]
+
+        import json
+        parsed = json.loads(ai_text)
+
+        return parsed.get("error_lines", [])
+
+    except Exception:
+        return []
 
 
 # -----------------------------
-# API Endpoint
+# Endpoint
 # -----------------------------
 @app.post("/code-interpreter", response_model=CodeResponse)
 def code_interpreter(request: CodeRequest):
@@ -108,6 +121,6 @@ def code_interpreter(request: CodeRequest):
     error_lines = analyze_error_with_ai(request.code, execution["output"])
 
     return {
-            "error": error_lines,
-            "result": execution["output"]
-        }
+        "error": error_lines,
+        "result": execution["output"]
+    }
