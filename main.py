@@ -14,7 +14,6 @@ app = FastAPI()
 # -----------------------------
 # Enable CORS
 # -----------------------------
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +25,6 @@ app.add_middleware(
 # -----------------------------
 # Request / Response Models
 # -----------------------------
-
 class CodeRequest(BaseModel):
     code: str
 
@@ -36,9 +34,8 @@ class CodeResponse(BaseModel):
 
 
 # -----------------------------
-# Tool Function
+# Execute Python Code
 # -----------------------------
-
 def execute_python_code(code: str) -> dict:
     old_stdout = sys.stdout
     sys.stdout = StringIO()
@@ -57,17 +54,15 @@ def execute_python_code(code: str) -> dict:
 
 
 # -----------------------------
-# AI Error Analysis (IITM AI Pipe)
+# AI Error Analysis using IITM AI Pipe
 # -----------------------------
-
 def analyze_error_with_ai(code: str, tb: str) -> List[int]:
 
     prompt = f"""
-Analyze the following Python code and its traceback.
+Analyze the following Python code and traceback.
 Identify ONLY the line number(s) where the error occurred.
 
-Return strictly in JSON format:
-
+Return strictly in this JSON format:
 {{
   "error_lines": [line_numbers]
 }}
@@ -80,7 +75,7 @@ TRACEBACK:
 """
 
     response = requests.post(
-        os.getenv("AI_PIPE_ENDPOINT"),   # Set this in Render
+        "https://aipipe.iitm.ac.in/generate",
         headers={
             "Authorization": f"Bearer {os.getenv('AI_PIPE_TOKEN')}",
             "Content-Type": "application/json"
@@ -93,14 +88,12 @@ TRACEBACK:
 
     data = response.json()
 
-    # Expected AI Pipe returns structured JSON
     return data.get("error_lines", [])
 
 
 # -----------------------------
 # API Endpoint
 # -----------------------------
-
 @app.post("/code-interpreter", response_model=CodeResponse)
 def code_interpreter(request: CodeRequest):
 
@@ -115,6 +108,6 @@ def code_interpreter(request: CodeRequest):
     error_lines = analyze_error_with_ai(request.code, execution["output"])
 
     return {
-        "error": error_lines,
-        "result": execution["output"]
-    }
+            "error": error_lines,
+            "result": execution["output"]
+        }
